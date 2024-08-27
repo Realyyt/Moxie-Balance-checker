@@ -9,15 +9,54 @@
     <h1>Moxie Balance Checker</h1>
     <input type="text" id="addressInput" placeholder="Enter address">
     <button onclick="checkBalance()">Check Balance</button>
+    <button onclick="checkHistory()">Check History</button>
     <p id="result"></p>
+    <div id="history"></div>
 
     <script>
     async function checkBalance() {
         const address = document.getElementById('addressInput').value;
-        const response = await fetch(`/balance/${address}`);
-        const data = await response.json();
-        document.getElementById('result').textContent = `Balance: ${data.balance} MOXIE`;
+        try {
+            const response = await fetch(`/balance/${address}`);
+            const data = await response.json();
+            document.getElementById('result').textContent = `Balance: ${data.balance} MOXIE`;
+        } catch (error) {
+            document.getElementById('result').textContent = `Error: ${error.message}`;
+        }
+    }
+
+    async function checkHistory() {
+        const address = document.getElementById('addressInput').value;
+        try {
+            const response = await fetch(`/historical-balance/${address}`);
+            const data = await response.json();
+            const historyDiv = document.getElementById('history');
+            historyDiv.innerHTML = `
+                <h2>Balance History</h2>
+                <table>
+                    <tr><td>Current:</td><td>${data.currentBalance} MOXIE</td></tr>
+                    <tr><td>1 Day Ago:</td><td>${data.oneDayAgoBalance} MOXIE</td></tr>
+                    <tr><td>1 Week Ago:</td><td>${data.oneWeekAgoBalance} MOXIE</td></tr>
+                </table>
+            `;
+        } catch (error) {
+            document.getElementById('history').innerHTML = `<p>Error: ${error.message}</p>`;
+        }
     }
     </script>
+    <style>
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            max-width: 400px;
+        }
+        td {
+            padding: 8px;
+            border-bottom: 1px solid #ddd;
+        }
+        tr:last-child td {
+            border-bottom: none;
+        }
+    </style>
 </body>
 </html>

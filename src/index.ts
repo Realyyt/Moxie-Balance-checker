@@ -40,6 +40,38 @@ app.get('/balance/:address', async (req, res) => {
   }
 });
 
+app.get('/historical-balance/:address', async (req, res) => {
+  try {
+    const address = req.params.address;
+    if (!ethers.isAddress(address)) {
+      return res.status(400).json({ error: 'Invalid Ethereum address' });
+    }
+    
+    const provider = new ethers.JsonRpcProvider('https://mainnet.base.org');
+    const contract = new ethers.Contract(MOXIE_CONTRACT_ADDRESS, MOXIE_ABI, provider);
+    
+    // Get current block number
+    const currentBlock = await provider.getBlockNumber();
+    
+    // Fetch balances at different block heights (e.g., current, 1 day ago, 1 week ago)
+    const balances = await Promise.all([
+      contract.balanceOf(address, { blockTag: currentBlock }),
+      contract.balanceOf(address, { blockTag: currentBlock - 6500 }), // ~1 day ago
+      contract.balanceOf(address, { blockTag: currentBlock - 45500 }) // ~1 week ago
+    ]);
+    
+    res.json({
+      address,
+      currentBalance: ethers.formatUnits(balances[0], 18),
+      oneDayAgoBalance: ethers.formatUnits(balances[1], 18),
+      oneWeekAgoBalance: ethers.formatUnits(balances[2], 18)
+    });
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({ error: 'Error fetching historical balance: ' + error.message });
+  }
+});
+
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK' });
 });
