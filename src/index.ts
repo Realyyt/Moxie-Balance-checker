@@ -38,7 +38,7 @@ const DEGEN_ABI = [
   'function transferFrom(address from, address to, uint256 amount) returns (bool)'
 ];
 
-const getBalance = async (contract, address, blockTag = 'latest') => {
+const getBalance = async (contract, address, blockTag: string | number = 'latest') => {
   return retry(async () => {
     console.log(`Attempting to get balance for ${address} at block ${blockTag}`);
     console.log(`Contract address: ${contract.target}`);
@@ -121,13 +121,10 @@ app.get('/historical-balance/:token/:address', async (req, res) => {
 
     const currentBlock = await provider.getBlockNumber();
     console.log(`Current block number: ${currentBlock}`);
-    const oneDayAgoBlock = currentBlock - 43200; // Approx. 1 day of blocks on Base (2s block time)
-    const oneWeekAgoBlock = currentBlock - 302400; // Approx. 1 week of blocks on Base
-
     const [currentBalance, oneDayAgoBalance, oneWeekAgoBalance] = await Promise.all([
-      getBalance(contract, address, currentBlock.toString()),
-      getBalance(contract, address, oneDayAgoBlock.toString()),
-      getBalance(contract, address, oneWeekAgoBlock.toString())
+      getBalance(contract, address, 'latest'),
+      getBalance(contract, address, currentBlock - 43200),  // Approx. 1 day ago
+      getBalance(contract, address, currentBlock - 302400)  // Approx. 1 week ago
     ]);
 
     res.json({
