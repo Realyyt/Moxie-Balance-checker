@@ -38,7 +38,7 @@ const DEGEN_ABI = [
   'function transferFrom(address from, address to, uint256 amount) returns (bool)'
 ];
 
-const getBalance = async (contract, address, blockTag: string | number = 'latest') => {
+const getBalance = async (contract, address, blockTag: string | number= 'latest') => {
   return retry(async () => {
     console.log(`Attempting to get balance for ${address} at block ${blockTag}`);
     console.log(`Contract address: ${contract.target}`);
@@ -136,49 +136,6 @@ app.get('/historical-balance/:token/:address', async (req, res) => {
   } catch (error) {
     console.error('Error in /historical-balance route:', error);
     res.status(500).json({ error: 'Error fetching historical balance: ' + error.message });
-  }
-});
-
-app.get('/history/:token/:address', async (req, res) => {
-  try {
-    const { token, address } = req.params;
-    if (!ethers.isAddress(address)) {
-      return res.status(400).json({ error: 'Invalid address' });
-    }
-
-    let contractAddress, contractABI;
-    if (token.toLowerCase() === 'moxie') {
-      contractAddress = MOXIE_CONTRACT_ADDRESS;
-      contractABI = MOXIE_ABI;
-    } else if (token.toLowerCase() === 'degen') {
-      contractAddress = DEGEN_CONTRACT_ADDRESS;
-      contractABI = DEGEN_ABI;
-    } else {
-      return res.status(400).json({ error: 'Invalid token' });
-    }
-
-    const provider = createProvider();
-    const contract = new ethers.Contract(contractAddress, contractABI, provider);
-
-    const currentBlock = await provider.getBlockNumber();
-    const oneDayAgoBlock = currentBlock - 7200; // Approximately 1 day ago (assuming 12s block time)
-    const oneWeekAgoBlock = currentBlock - 50400; // Approximately 1 week ago
-
-    const [currentBalance, oneDayAgoBalance, oneWeekAgoBalance] = await Promise.all([
-      getBalance(contract, address, currentBlock.toString()),
-      getBalance(contract, address, oneDayAgoBlock.toString()),
-      getBalance(contract, address, oneWeekAgoBlock.toString())
-    ]);
-
-    res.json({
-      address,
-      currentBalance,
-      oneDayAgoBalance,
-      oneWeekAgoBalance
-    });
-  } catch (error) {
-    console.error('Error in /history route:', error);
-    res.status(500).json({ error: 'Error fetching balance history: ' + error.message });
   }
 });
 
