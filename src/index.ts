@@ -39,6 +39,10 @@ app.get('/balance/:token/:address', async (req, res) => {
     let balance;
     try {
       balance = await contract.balanceOf(address);
+      if (balance === '0x') {
+        return res.status(404).json({ error: 'No balance found or unable to decode balance' });
+      }
+      res.json({ address, balance: ethers.formatUnits(balance, 18) });
     } catch (error) {
       console.error('Error fetching balance:', error);
       if (error.code === 'CALL_EXCEPTION') {
@@ -46,12 +50,6 @@ app.get('/balance/:token/:address', async (req, res) => {
       }
       throw error;
     }
-
-    if (balance === '0x') {
-      return res.status(404).json({ error: 'No balance found or unable to decode balance' });
-    }
-
-    res.json({ address, balance: ethers.formatUnits(balance, 18) });
   } catch (error) {
     console.error('Error:', error);
     res.status(500).json({ error: 'Error fetching balance: ' + error.message });
