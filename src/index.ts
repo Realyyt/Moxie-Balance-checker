@@ -1,14 +1,45 @@
-import express from 'express';
-import { ethers } from 'ethers';
 import path from 'path';
+import { retry } from 'ts-retry-promise';
+import { ethers } from 'ethers';
+import express from 'express';
 import cors from 'cors';
 
-const MOXIE_CONTRACT_ADDRESS = '0x7448c7456a97769F6cD04F1E83A4a23cCdC46aBD'; 
-const DEGEN_CONTRACT_ADDRESS = '0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed'; 
-const TOKEN_ABI = ['function balanceOf(address) view returns (uint256)']; 
+// Base network addresses
+const MOXIE_CONTRACT_ADDRESS = '0x7448c7456a97769F6cD04F1E83A4a23cCdC46aBD';
+const DEGEN_CONTRACT_ADDRESS = '0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed';
 
-// Base's RPC URL
-const provider = new ethers.JsonRpcProvider('https://mainnet.base.org');
+// Base network public RPC URL
+//instead of using a global provider, i am using a provider for each request to prevent over rate limit
+const createProvider = () => {
+  return new ethers.JsonRpcProvider('https://mainnet.base.org');
+};
+
+const MOXIE_ABI = [
+  'function balanceOf(address account) view returns (uint256)',
+  'function decimals() view returns (uint8)',
+  'function symbol() view returns (string)'
+];
+
+const DEGEN_ABI = [
+  'function balanceOf(address account) view returns (uint256)',
+  'function decimals() view returns (uint8)',
+  'function symbol() view returns (string)'
+];
+
+const getBalance = async (contract, address, blockTag = 'latest') => {
+  return retry(async () => {
+    console.log(`Attempting to get balance for ${address} at block ${blockTag}`);
+    console.log(`Contract address: ${contract.target}`); // Use contract.target instead of contract.address
+    try {
+      const balance = await contract.balanceOf(address, { blockTag });
+      console.log(`Raw balance result: ${balance}`);
+      return ethers.formatUnits(balance, await contract.decimals());
+    } catch (error) {
+      console.error(`Error fetching balance: ${error.message}`);
+      throw error;
+    }
+  }, { retries: 3, delay: 1000 });
+};
 
 const app = express();
 const port = 3000;
@@ -30,29 +61,32 @@ app.get('/balance/:token/:address', async (req, res) => {
   try {
     const { token, address } = req.params;
     if (!ethers.isAddress(address)) {
-      return res.status(400).json({ error: `Invalid ${token === 'moxie' ? "moxie" : "degen"} address` });
+      return res.status(400).json({ error: 'Invalid address' });
     }
 
-    const contractAddress = token.toLowerCase() === 'moxie' ? MOXIE_CONTRACT_ADDRESS : DEGEN_CONTRACT_ADDRESS;
-    const contract = new ethers.Contract(contractAddress, TOKEN_ABI, provider);
-    
-    let balance;
+    let contractAddress, contractABI;
+    if (token.toLowerCase() === 'moxie') {
+      contractAddress = MOXIE_CONTRACT_ADDRESS;
+      contractABI = MOXIE_ABI;
+    } else {
+      contractAddress = DEGEN_CONTRACT_ADDRESS;
+      contractABI = DEGEN_ABI;
+    }
+
+    console.log(`Using contract address: ${contractAddress}`);
+    const provider = createProvider();
+    const contract = new ethers.Contract(contractAddress, contractABI, provider);
+
     try {
-      balance = await contract.balanceOf(address);
-      if (balance === '0x') {
-        return res.status(404).json({ error: 'No balance found or unable to decode balance' });
-      }
-      res.json({ address, balance: ethers.formatUnits(balance, 18) });
+      const balance = await getBalance(contract, address);
+      res.json({ address, balance });
     } catch (error) {
-      console.error('Error fetching balance:', error);
-      if (error.code === 'CALL_EXCEPTION') {
-        return res.status(500).json({ error: 'Error calling contract. Possible rate limiting.' });
-      }
-      throw error;
+      console.error(`Error fetching ${token} balance:`, error);
+      res.status(500).json({ error: `Error fetching ${token} balance: ${error.message}` });
     }
   } catch (error) {
-    console.error('Error:', error);
-    res.status(500).json({ error: 'Error fetching balance: ' + error.message });
+    console.error('Error in /balance route:', error);
+    res.status(500).json({ error: 'Error in balance route: ' + error.message });
   }
 });
 
@@ -62,28 +96,37 @@ app.get('/historical-balance/:token/:address', async (req, res) => {
     if (!ethers.isAddress(address)) {
       return res.status(400).json({ error: 'Invalid address' });
     }
-
-    const contractAddress = token.toLowerCase() === 'moxie' ? MOXIE_CONTRACT_ADDRESS : DEGEN_CONTRACT_ADDRESS;
-    const contract = new ethers.Contract(contractAddress, TOKEN_ABI, provider);
+    let contractAddress, contractABI;
+    if (token.toLowerCase() === 'moxie') {
+      contractAddress = MOXIE_CONTRACT_ADDRESS;
+      contractABI = MOXIE_ABI;
+    } else {
+      contractAddress = DEGEN_CONTRACT_ADDRESS;
+      contractABI = DEGEN_ABI;
+    }
+    const provider = createProvider();
+    console.log(`Using contract address: ${contractAddress}`);
+    const contract = new ethers.Contract(contractAddress, contractABI , provider);
 
     const currentBlock = await provider.getBlockNumber();
-    const oneDayAgoBlock = currentBlock - 6500; // Approx. 1 day of blocks
-    const oneWeekAgoBlock = currentBlock - 45500; // Approx. 1 week of blocks
+    console.log(`Current block number: ${currentBlock}`);
+    const oneDayAgoBlock = currentBlock - 43200; // Approx. 1 day of blocks on Base (2s block time)
+    const oneWeekAgoBlock = currentBlock - 302400; // Approx. 1 week of blocks on Base
 
     const [currentBalance, oneDayAgoBalance, oneWeekAgoBalance] = await Promise.all([
-      contract.balanceOf(address, { blockTag: currentBlock }),
-      contract.balanceOf(address, { blockTag: oneDayAgoBlock }),
-      contract.balanceOf(address, { blockTag: oneWeekAgoBlock })
+      getBalance(contract, address, currentBlock.toString()),
+      getBalance(contract, address, oneDayAgoBlock.toString()),
+      getBalance(contract, address, oneWeekAgoBlock.toString())
     ]);
 
     res.json({
       address,
-      currentBalance: ethers.formatUnits(currentBalance, 18),
-      oneDayAgoBalance: ethers.formatUnits(oneDayAgoBalance, 18),
-      oneWeekAgoBalance: ethers.formatUnits(oneWeekAgoBalance, 18)
+      currentBalance,
+      oneDayAgoBalance,
+      oneWeekAgoBalance
     });
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Error in /historical-balance route:', error);
     res.status(500).json({ error: 'Error fetching historical balance: ' + error.message });
   }
 });

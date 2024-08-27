@@ -14,7 +14,8 @@
     "@types/cors": "^2.8.17",
     "cors": "^2.8.5",
     "ethers": "^6.13.2",
-    "express": "^4.19.2"
+    "express": "^4.19.2",
+    "ts-retry-promise": "^0.8.1"
   },
   "devDependencies": {
     "@types/node": "^22.5.0",
