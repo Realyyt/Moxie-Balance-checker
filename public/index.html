@@ -3,40 +3,72 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Moxie Balance Checker</title>
+    <title>Token Balance Checker</title>
+    <style>
+        table { border-collapse: collapse; width: 100%; max-width: 400px; }
+        td, th { border: 1px solid #ddd; padding: 8px; }
+        th { background-color: #f2f2f2; }
+    </style>
 </head>
 <body>
-    <h1>Moxie Balance Checker</h1>
+    <h1>Token Balance Checker</h1>
     <input type="text" id="addressInput" placeholder="Enter address">
-    <button onclick="checkBalance()">Check Balance</button>
+    <button onclick="checkBalances()">Check Balances</button>
     <button onclick="checkHistory()">Check History</button>
-    <p id="result"></p>
+    <div id="result"></div>
     <div id="history"></div>
 
     <script>
-    async function checkBalance() {
+    async function checkBalances() {
         const address = document.getElementById('addressInput').value;
         try {
-            const response = await fetch(`/balance/${address}`);
-            const data = await response.json();
-            document.getElementById('result').textContent = `Balance: ${data.balance} MOXIE`;
+            const moxieResponse = await fetch(`/balance/moxie/${address}`);
+            const moxieData = await moxieResponse.json();
+            const degenResponse = await fetch(`/balance/degen/${address}`);
+            const degenData = await degenResponse.json();
+
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = `
+                <h2>Current Balances</h2>
+                <table>
+                    <tr><th>Token</th><th>Balance</th></tr>
+                    <tr><td>MOXIE</td><td>${moxieData.balance}</td></tr>
+                    <tr><td>DEGEN</td><td>${degenData.balance}</td></tr>
+                </table>
+            `;
         } catch (error) {
-            document.getElementById('result').textContent = `Error: ${error.message}`;
+            document.getElementById('result').innerHTML = `<p>Error: ${error.message}</p>`;
         }
     }
 
     async function checkHistory() {
         const address = document.getElementById('addressInput').value;
         try {
-            const response = await fetch(`/historical-balance/${address}`);
-            const data = await response.json();
+            const moxieResponse = await fetch(`/historical-balance/moxie/${address}`);
+            const moxieData = await moxieResponse.json();
+            const degenResponse = await fetch(`/historical-balance/degen/${address}`);
+            const degenData = await degenResponse.json();
+
             const historyDiv = document.getElementById('history');
             historyDiv.innerHTML = `
                 <h2>Balance History</h2>
                 <table>
-                    <tr><td>Current:</td><td>${data.currentBalance} MOXIE</td></tr>
-                    <tr><td>1 Day Ago:</td><td>${data.oneDayAgoBalance} MOXIE</td></tr>
-                    <tr><td>1 Week Ago:</td><td>${data.oneWeekAgoBalance} MOXIE</td></tr>
+                    <tr><th>Period</th><th>MOXIE</th><th>DEGEN</th></tr>
+                    <tr>
+                        <td>Current</td>
+                        <td>${moxieData.currentBalance}</td>
+                        <td>${degenData.currentBalance}</td>
+                    </tr>
+                    <tr>
+                        <td>1 Day Ago</td>
+                        <td>${moxieData.oneDayAgoBalance}</td>
+                        <td>${degenData.oneDayAgoBalance}</td>
+                    </tr>
+                    <tr>
+                        <td>1 Week Ago</td>
+                        <td>${moxieData.oneWeekAgoBalance}</td>
+                        <td>${degenData.oneWeekAgoBalance}</td>
+                    </tr>
                 </table>
             `;
         } catch (error) {
@@ -44,19 +76,5 @@
         }
     }
     </script>
-    <style>
-        table {
-            border-collapse: collapse;
-            width: 100%;
-            max-width: 400px;
-        }
-        td {
-            padding: 8px;
-            border-bottom: 1px solid #ddd;
-        }
-        tr:last-child td {
-            border-bottom: none;
-        }
-    </style>
 </body>
 </html>
